@@ -1,0 +1,28 @@
+exchanges:
+  - name: &exchanges0 subjects-exchange
+    settings:
+      type: topic
+      durable: false
+      auto_delete: true
+queues:
+  - name: &queues0 subjects.consumer.lisbon
+    settings:
+      durable: true
+      auto_delete: true
+  - name: &queues1 subjects.consumer.faro
+    settings:
+      durable: true
+      auto_delete: true
+bindings:
+  - source: *exchanges0
+    destination: *queues0
+    destination_type: queue
+    routing_key: "#.lisbon"
+  - source: *exchanges0
+    destination: *queues1
+    destination_type: queue
+    routing_key: "#.faro"
+  - source: *exchanges0
+    destination: *queues0
+    destination_type: queue
+    routing_key: "air-asia.nobcbp.nobcbp"

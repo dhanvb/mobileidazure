@@ -1,0 +1,221 @@
+include:
+  - project: mobile-id/infra/ci-templates
+    ref: main
+    file:
+      - terraform-templates.yml
+
+variables:
+  ARM_SUBSCRIPTION_ID: ${AZ_SUBSCRIPTION_ID}
+  ARM_CLIENT_ID: ${AZURE_SERVICE_PRINCIPAL_APP_ID}
+  ARM_CLIENT_SECRET: ${AZURE_SERVICE_PRINCIPAL_CLIENT_SECRET}
+  ARM_TENANT_ID: ${AZURE_SERVICE_PRINCIPAL_TENANT_ID}
+  ENV_FILE_PATH: ${CI_PROJECT_DIR}/.env
+  TF_STATE_NAME: azure-terraform-state
+  TF_VAR_container_registry_name: ${AZ_CONTAINER_REGISTRY_SERVER}
+  TF_VAR_container_registry_password: ${AZ_CONTAINER_REGISTRY_PASSWORD}
+  TF_VAR_container_registry_username: ${AZ_CONTAINER_REGISTRY_USERNAME}
+  TF_VAR_dev_container_registry_name: ${AZ_DEV_CONTAINER_REGISTRY_SERVER}
+  TF_VAR_dev_container_registry_password: ${AZ_DEV_CONTAINER_REGISTRY_PASSWORD}
+  TF_VAR_dev_container_registry_username: ${AZ_DEV_CONTAINER_REGISTRY_USERNAME}
+  TF_VAR_azure_storage_account_name: ${AZURE_STORAGE_ACCOUNT_NAME}
+  TF_VAR_azure_storage_account_key: ${AZURE_STORAGE_ACCOUNT_KEY}
+  TF_VAR_liveness_api_key: ${LIVENESS_API_KEY}
+  TF_VAR_admin_ssh_key_data: ${LINUX_PROFILE_SSH_KEY}
+  TF_VAR_environments: "[]"
+  TF_VAR_subjects_data_flow_injection_credentials: ${SUBJECTS_DATA_FLOW_INJECTION_CREDENTIALS}
+  TF_VAR_cloudamqp_apikey: ${CLOUDAMQP_API_KEY}
+  TF_VAR_cloudamqp_endpoint: ${CLOUDAMQP_ENDPOINT}
+
+stages:
+  - init
+  - validate
+  - analyse
+  - build-deploy-broker
+  - build-deploy-infra
+  - build-deploy-kubernetes
+  - cleanup
+
+.pre-step-script: &pre-step-script
+  - if [ ${CI_COMMIT_BRANCH} = "develop" ]; then TF_VAR_environments=$ENVIRONMENTS_DEV; fi
+  - if [ ${CI_COMMIT_BRANCH} = "qa" ]; then TF_VAR_environments=$ENVIRONMENTS_QA; fi
+  - if [ ${CI_COMMIT_BRANCH} = "main" ]; then TF_VAR_environments=$ENVIRONMENTS_MAIN; fi
+  - echo "TF_VAR_environments -> $TF_VAR_environments"
+
+init-broker:
+  extends: .init-broker
+
+init-infra:
+  extends: .init-infra
+
+init-k8s:
+  extends: .init-kubernetes
+
+format:
+  extends: .format
+
+validate-broker:
+  extends: .validate-broker
+
+validate-infra:
+  extends: .validate-infra
+
+validate-kubernetes:
+  extends: .validate-kubernetes
+
+lint:
+  extends: .lint
+
+scan:
+  extends: .scan
+
+cost:
+  extends: .cost
+
+build-broker:
+  stage: build-deploy-broker
+  variables:
+    TF_ROOT: ${CI_PROJECT_DIR}/src/broker
+    TF_STATE_NAME: broker-state-${CI_COMMIT_BRANCH}
+  script:
+    - *pre-step-script
+    - cd ${TF_ROOT}
+    - gitlab-terraform plan -lock=false
+    - gitlab-terraform plan-json -lock=false
+  resource_group: ${TF_STATE_NAME}
+  artifacts:
+    paths:
+      - ${TF_ROOT}/plan.cache
+    reports:
+      terraform: ${TF_ROOT}/plan.json
+  only:
+    - develop
+    - qa
+    - main
+  retry: 2
+
+deploy-broker:
+  stage: build-deploy-broker
+  needs:
+    - build-broker
+  variables:
+    TF_ROOT: ${CI_PROJECT_DIR}/src/broker
+    TF_STATE_NAME: broker-state-${CI_COMMIT_BRANCH}
+  script:
+    - *pre-step-script
+    - cd ${TF_ROOT}
+    - gitlab-terraform apply -lock=false
+    - gitlab-terraform output -json | jq 'to_entries|map("TF_VAR_\(.key)=\(.value.value|tostring)")|.[]' | sed -e "s/^\"//g" -e "s/\"$//g" >> ${ENV_FILE_PATH}
+  resource_group: ${TF_STATE_NAME}
+  artifacts:
+    paths:
+      - ${ENV_FILE_PATH}
+  only:
+    - develop
+    - qa
+    - main
+  retry: 2
+
+build-infra:
+  stage: build-deploy-infra
+  variables:
+    TF_ROOT: ${CI_PROJECT_DIR}/src/infra
+    TF_STATE_NAME: azure-infra-state-${CI_COMMIT_BRANCH}
+  script:
+    - *pre-step-script
+    - cd ${TF_ROOT}
+    - gitlab-terraform plan
+    - gitlab-terraform plan-json
+  resource_group: ${TF_STATE_NAME}
+  artifacts:
+    paths:
+      - ${TF_ROOT}/plan.cache
+    reports:
+      terraform: ${TF_ROOT}/plan.json
+  only:
+    - develop
+    - qa
+    - main
+  retry: 2
+
+deploy-infra:
+  stage: build-deploy-infra
+  needs:
+    - build-infra
+  variables:
+    TF_ROOT: ${CI_PROJECT_DIR}/src/infra
+    TF_STATE_NAME: azure-infra-state-${CI_COMMIT_BRANCH}
+  script:
+    - *pre-step-script
+    - cd ${TF_ROOT}
+    - gitlab-terraform apply
+    - gitlab-terraform output -json | jq 'to_entries|map("TF_VAR_\(.key)=\(.value.value|tostring)")|.[]' | sed -e "s/^\"//g" -e "s/\"$//g" >> ${ENV_FILE_PATH}
+  resource_group: ${TF_STATE_NAME}
+  artifacts:
+    # not using reports:dotenv because the env file is too large
+    paths:
+      - ${ENV_FILE_PATH}
+  only:
+    - develop
+    - qa
+    - main
+  retry: 2
+
+build-kubernetes:
+  stage: build-deploy-kubernetes
+  variables:
+    TF_ROOT: ${CI_PROJECT_DIR}/src/kubernetes
+    TF_STATE_NAME: azure-kubernetes-state-${CI_COMMIT_BRANCH}
+  script:
+    - *pre-step-script
+    - cd ${TF_ROOT}
+    - set -o allexport; source ${ENV_FILE_PATH}; set +o allexport # manual way to load env file
+    - gitlab-terraform plan
+    - gitlab-terraform plan-json
+  resource_group: ${TF_STATE_NAME}
+  artifacts:
+    paths:
+      - ${TF_ROOT}/plan.cache
+    reports:
+      terraform: ${TF_ROOT}/plan.json
+  only:
+    - develop
+    - qa
+    - main
+  retry: 2
+
+deploy-kubernetes:
+  stage: build-deploy-kubernetes
+  needs:
+    - deploy-infra
+    - build-kubernetes
+  variables:
+    TF_ROOT: ${CI_PROJECT_DIR}/src/kubernetes
+    TF_STATE_NAME: azure-kubernetes-state-${CI_COMMIT_BRANCH}
+  script:
+    - *pre-step-script
+    - cd ${TF_ROOT}
+    - set -o allexport; source ${ENV_FILE_PATH}; set +o allexport # manual way to load env file
+    - gitlab-terraform apply
+  resource_group: ${TF_STATE_NAME}
+  only:
+    - develop
+    - qa
+    - main
+  retry: 2
+
+destroy:
+  stage: cleanup
+  variables:
+    TF_ROOT: ${CI_PROJECT_DIR}/src/infra
+    TF_STATE_NAME: azure-infra-state-${CI_COMMIT_BRANCH}
+  script:
+    - *pre-step-script
+    - cd ${TF_ROOT}
+    - set -o allexport; source ${ENV_FILE_PATH}; set +o allexport # manual way to load env file
+    - gitlab-terraform destroy
+  resource_group: ${TF_STATE_NAME}
+  when: manual
+  timeout: 30 minutes
+  only:
+    - develop
+    - qa

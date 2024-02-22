@@ -1,0 +1,72 @@
+# CHANGE THESE VARIABLES TO DEPLOY THE INFRASTRUCTURE
+# ---------------------------------------------------
+client: "mtvb"     # Client's name. No spaces allowed.
+regions: # Project's regions. Check Azure's available regions and fill the default value.
+  dev: "eastus2"
+  qa: "eastus2"
+  stg: "eastus2"
+  prd: "eastus2"
+dns: "aks-mtvb-mobsdk-dev.privatelink.switzerlandnorth.azmk8s.io" # Base domain.
+# ---------------------------------------------------
+
+# DATABASE
+# ---------------------------------------------------
+postgres_version: 11         # Database's postgres version. Major versions only.
+db_storage_size: 32          # The size of the data disk, in GB.
+db_sku: "GP_Gen5_2"          # Specifies the SKU Name for the db server.
+db_backup_retention_days: 7  # Backup retention days for the server.
+high_availability: false     # A boolean indicating if the database has high availability.
+# ---------------------------------------------------
+
+# KUBERNETES CLUSTER
+# ---------------------------------------------------
+k8s_linux_node_count: 1                # Linux node pool's node count.
+k8s_linux_vm_size: "Standard_D8s_v4" # Linux node vm size.
+k8s_windows_node_count: 1                # Windows node pool's node count.
+k8s_windows_vm_size: "Standard_F4"   # Windows node vm size.
+k8s_dns_prefix: "mobileid"       # DNS prefix specified when creating the managed cluster.
+# ---------------------------------------------------
+
+# MESSAGE BROKER
+# ---------------------------------------------------
+cloudamq_instances:
+  - env: dev
+    plan: lemur
+  - env: qa
+    plan: lemur
+  - env: stg
+    plan: lemur
+  - env: prd
+    plan: lemur
+cloudamq_region: "azure-arm::westeurope"
+# ---------------------------------------------------
+
+# LIVENESS
+# ---------------------------------------------------
+liveness_replicas: 1 # Number of liveness pod's replicas."
+liveness_version: "1.36.0" # Liveness' image version.
+# ---------------------------------------------------
+
+# KEYCLOAK
+# ---------------------------------------------------
+keycloak_dns_name: "auth" # DNS name to access application
+keycloak_version: "21.0.2" # Keycloak's image version.
+# ---------------------------------------------------
+
+# GATEWAY
+# ---------------------------------------------------
+gateway_dns_name: "api" # DNS name to access application
+gateway_version: "4.2.5" # Gateway's image version.
+gateway_replicas: 1 # Number of gateway pod's replicas.
+# ---------------------------------------------------
+
+# BACKOFFICE
+# ---------------------------------------------------
+backoffice_dns_name: "bo" # DNS name to access application
+backoffice_version: "2.1.1" # Backoffice's image version.
+# ---------------------------------------------------
+
+# Match service
+# ---------------------------------------------------
+match_service_version: "1.2.0" # Match service's image version.
+# ---------------------------------------------------

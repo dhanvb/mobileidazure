@@ -1,0 +1,33 @@
+block-list-secret-scan: []
+branch: main
+directory:
+- ./src
+download-external-modules: false
+evaluate-variables: true
+external-modules-download-path: .external_modules
+framework:
+- all
+secrets-scan-file-type: []
+skip-check:
+- CKV_AZURE_117 # Disabled because the encryption keys must be managed manually.
+- CKV_AZURE_130 # Per recommendation of the docs, this instance will "incur a substantial performance degradation due to a second encryption pass. It is strongly suggested to leave this value false."
+- CKV_K8S_30 # REQUIRED BY BO - NEED TO FIX IT IN NEXT VERSION
+- CKV_K8S_28 # REQUIRED BY BO - NEED TO FIX IT IN NEXT VERSION
+- CKV_K8S_29 # REQUIRED BY BO - NEED TO FIX IT IN NEXT VERSION
+- CKV_K8S_43 # Image should use Digest. Doesn't make sense in our case.
+- CKV_K8S_42 # Ensure that default service accounts are not actively used. This is used in gateway_role_binding. Need to investigate.
+- CKV_K8S_8 # Ensure probes are configured. This is triggered by the postgres proxy. Need to investigate a way to create health checks in this service.
+- CKV_K8S_9 # Ensure probes are configured. This is triggered by the postgres proxy. Need to investigate a way to create health checks in this service.
+- CKV_K8S_22
+- CKV_K8S_14 
+- CKV_AZURE_115 # Make AKS a private cluster. To be investigated.
+- CKV_AZURE_6
+- CKV_AZURE_141
+- CKV_AZURE_68 # TEMP: Public database.
+- CKV2_AZURE_31 # To be investigated.
+- CKV_AZURE_102 # Ensure database has georedundant backups. This is not needed since it's a dev environment.
+- CKV_AZURE_170 # Ensure that AKS use the Paid Sku for its SLA. This is not needed since it's a dev environment.
+- CKV_K8S_35 # Prefer using secrets as files over secrets as environment variables. To be investigated.
+- CKV2_AZURE_28
+- CKV_AZURE_98
+summary-position: top
